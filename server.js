@@ -8,7 +8,7 @@ require('dotenv').config();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Enable CORS and JSON parsing (increase limit for large data)
 app.use(cors());
@@ -32,7 +32,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
-const DEFAULT_FILE = path.join(__dirname, '..', 'Ho tro tao all - Copy - Copy.xlsx');
+const DEFAULT_FILE = path.join(__dirname, 'Ho tro tao all - Copy - Copy.xlsx');
 
 // Helper to get file path
 const getFilePath = (filename) => {
@@ -245,9 +245,9 @@ app.get('/api/download', (req, res) => {
     }
 });
 
-const ROUTE_ALL_PATH = path.join(__dirname, '..', 'ROUTE_ALL.xls');
+const ROUTE_ALL_PATH = path.join(__dirname, 'ROUTE_ALL.xls');
 const FILE_NAME_TAOREPAIR = 'Ho tro tao all - Copy - Copy.xlsx';
-const TAOREPAIR_PATH = path.join(__dirname, '..', FILE_NAME_TAOREPAIR);
+const TAOREPAIR_PATH = path.join(__dirname, FILE_NAME_TAOREPAIR);
 
 let routeAllData = [];
 let taoRepairMap = new Map(); // Key: ROUTE_RIDX, Value: SQL
