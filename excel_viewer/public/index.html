@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Viewer Pro</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="logo">
+                <h2>Excel<span>Viewer</span></h2>
+            </div>
+
+            <div class="sidebar-section">
+                <!-- Data Files -->
+                <div class="section-title">Files</div>
+                <div class="actions-row">
+                    <label for="fileInput" class="upload-btn">
+                        + Upload
+                    </label>
+                    <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" hidden>
+                </div>
+                <!-- Default File Entry -->
+                <div class="files-list" id="filesList">
+                    <div class="file-item active" data-filename="">
+                        <span class="file-name">Default File</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+                <div class="section-title">Sheets</div>
+                <div class="sheets-list" id="sheetList">
+                    <div class="loading">Loading sheets...</div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="content">
+            <header>
+                <h1 id="currentSheetName">Select a Sheet</h1>
+                <div class="actions">
+                    <button class="btn ai-toggle-btn" id="aiToggleBtn">✨ AI Assistant</button>
+                    <button class="btn btn-primary" id="genSqlBtn"
+                        style="background: #8b5cf6; border-color: #7c3aed;">Generate SQL</button>
+                    <button class="btn btn-success" id="saveBtn" style="display:none;">Save Change</button>
+                    <button class="btn" id="downloadBtn" style="background: #0ea5e9; color: white;">Download
+                        File</button>
+                    <button class="btn" id="refreshBtn">Refresh</button>
+                </div>
+                <div id="saveStatus" style="font-size: 0.8rem; color: #10b981; margin-top: 5px; height: 20px;"></div>
+            </header>
+
+            <div class="info-banner" id="infoBanner">
+                Please select a sheet from the sidebar to view data.
+            </div>
+
+            <div class="table-container fade-in" id="tableContainer" style="display: none;">
+                <table id="dataTable">
+                    <thead id="tableHead"></thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+
+            <!-- SQL Output Modal -->
+            <div id="sqlModal" class="loading-overlay"
+                style="display: none; align-items: flex-start; padding-top: 50px;">
+                <div
+                    style="background: #1e293b; padding: 20px; border-radius: 8px; width: 80%; max-width: 800px; border: 1px solid #334155; display: flex; flex-direction: column; gap: 10px; max-height: 80vh;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="margin: 0;">Generated SQL</h3>
+                        <button id="closeSqlBtn" class="btn" style="padding: 4px 8px;">&times;</button>
+                    </div>
+                    <textarea id="sqlOutput"
+                        style="width: 100%; height: 300px; background: rgba(0,0,0,0.3); color: #a5f3fc; border: 1px solid #334155; padding: 10px; font-family: monospace;"
+                        readonly></textarea>
+                    <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                        <button id="copySqlBtn" class="btn btn-primary">Copy to Clipboard</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Panel -->
+            <div class="ai-panel hidden" id="aiPanel">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3 style="margin-bottom:5px;">AI Data Modifier</h3>
+                    <input type="password" id="apiKeyInput" class="ai-key-input"
+                        placeholder="Enter Gemini API Key (Optional)">
+                </div>
+                <div class="ai-controls">
+                    <textarea id="aiPromptInput" class="ai-input"
+                        placeholder="Describe how you want to modify this data (e.g. 'Translate column B to English', 'Split column Name into First and Last')..."></textarea>
+                    <button class="btn btn-primary" id="runAiBtn">Run AI</button>
+                </div>
+                <div style="font-size:0.8rem; color:#94a3b8; margin-top:5px;">
+                    Note: AI processing may take a few seconds. Currently limited to first 200 rows for demo.
+                </div>
+            </div>
+
+            <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+                <div class="spinner"></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,11 @@
+excel_viewer/node_modules/
+excel_viewer/.env
+excel_viewer/uploads/
+*.xls
+*.xlsx
+*.xlsm
+temp_task_utils/
+~$*
+.gemini/
+.agent/
+brain/
