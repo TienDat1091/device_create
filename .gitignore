@@ -1,12 +1,13 @@
 node_modules/
 .env
 uploads/
-*.xls
-*.xlsx
-*.xlsm
 temp_task_utils/
 excel_viewer/
 ~$*
 .gemini/
 .agent/
 brain/
+
+# Keep the knowledge base
+!ROUTE_ALL.xls
+!Ho tro tao all - Copy - Copy.xlsx
