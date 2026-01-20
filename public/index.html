@@ -47,12 +47,28 @@
             <header>
                 <h1 id="currentSheetName">Select a Sheet</h1>
                 <div class="actions">
-                    <div style="display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.2); padding: 4px 10px; border-radius: 6px; border: 1px solid #334155;">
+                    <div
+                        style="display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.2); padding: 4px 10px; border-radius: 6px; border: 1px solid #334155;">
                         <span style="font-size: 0.8rem; color: #94a3b8;">DB:</span>
-                        <select id="dbTypeSelect" style="background: transparent; color: white; border: none; font-size: 0.8rem; outline: none; cursor: pointer;">
+                        <select id="dbTypeSelect"
+                            style="background: transparent; color: white; border: none; font-size: 0.8rem; outline: none; cursor: pointer;">
                             <option value="VNKR" style="background: #1e293b;">VNKRDB0</option>
                             <option value="VNFB" style="background: #1e293b;">VNFBDB0</option>
                         </select>
+                    </div>
+                    <div
+                        style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.2); padding: 6px 12px; border-radius: 6px; border: 1px solid #334155;">
+                        <span style="font-size: 0.8rem; color: #94a3b8;">Mode:</span>
+                        <label
+                            style="display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 0.8rem;">
+                            <input type="radio" name="sqlMode" value="normal" style="cursor: pointer;">
+                            Normal
+                        </label>
+                        <label
+                            style="display: flex; align-items: center; gap: 4px; cursor: pointer; font-size: 0.8rem;">
+                            <input type="radio" name="sqlMode" value="repair" checked style="cursor: pointer;">
+                            Repair
+                        </label>
                     </div>
                     <button class="btn ai-toggle-btn" id="aiToggleBtn">✨ AI Assistant</button>
                     <button class="btn btn-primary" id="genSqlBtn"

@@ -225,7 +225,7 @@ loadAuxiliaryData();
 
 app.post('/api/generate-sql', (req, res) => {
     try {
-        const { filename, sheetName, dbType } = req.body;
+        const { filename, sheetName, dbType, mode } = req.body;
         const selectedDB = knowledgeBase[dbType] || knowledgeBase.VNKR;
         const { routeAllData, repairFrequencyMap, grpToSectionMap } = selectedDB;
         const filePath = getFilePath(filename);
@@ -238,6 +238,36 @@ app.post('/api/generate-sql', (req, res) => {
         let useCount = 0;
         let ruleCount = 0;
 
+        // NORMAL MODE: Generate simple INSERT statements for regular stations (RIDX 1-999)
+        if (mode === 'normal') {
+            const columns = `ROUTE,RIDX,STEP,STEPTIME,TIMESTEP,STEPSTAY,LOWSTEPTIME,LOWTIMESTEP,RTYPE1,RTYPE2,RTYPE3,MSTEP,OSTEP,SECTION,GRP,STEPFLAG,STEPFLAG1,STEPFLAG2,STEPFLAG3,KP1,KP2,KP3,TOKP,CHKKP1,CHKKP2,KPMODE,STEPNM`;
+
+            rawData.forEach(row => {
+                const stepValue = row.STEP || row.STEPNM || '';
+                const ridx = parseInt(row.RIDX);
+
+                // Filter: RIDX 1-999 (exclude RIDX with 4+ trailing zeros like 80001, 100001)
+                if (!row.RIDX || !row.ROUTE || isNaN(ridx) || ridx >= 10000) return;
+
+                sqlEntryCount++;
+                sqlOutput += `-- No: ${sqlEntryCount}\n`;
+
+                const route = row.ROUTE || '';
+                const step = stepValue.toString().trim();
+                const mstep = row.MSTEP || '0';
+                const ostep = row.OSTEP || '0';
+                const section = (row.SECTION || '').toString().trim();
+                const grp = (row.GRP || '').toString().trim();
+                const rtype2 = (row.RTYPE2 || 'N').toString().trim();
+
+                sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${ridx}','${step}',0,0,0,0,0,'','${rtype2}','','${mstep}','${ostep}','${section}','${grp}','','','','','','','','','','','','');\n\n`;
+                useCount++;
+            });
+
+            return res.json({ sql: sqlOutput, count: rawData.length, info: `Generated ${useCount} Normal Stations` });
+        }
+
+        // REPAIR-ROLLBACK MODE: Existing complex logic
         rawData.forEach((row, rowIndex) => {
             const stepValue = row.STEP || row.STEPNM;
             if (!row.RIDX || !stepValue || !row.ROUTE || !row.REPAIR) return;
@@ -315,7 +345,12 @@ app.post('/api/generate-sql', (req, res) => {
             const buildName = (pref, mid, grp) => `${pref}${mid}${grp}`;
 
             const repairStepFinal = buildName(basePrefix, targetSecPrefix, targetGrp);
-            const targetRollbackFirstStep = buildName(basePrefix, alphaSeq[0], targetGrp);
+
+            // CRITICAL: MSTEP logic depends on number of sources
+            // - Single source (e.g., TBA): Use source+Z (ICP8ZTBA)
+            // - Multiple sources (e.g., TVK,TVI,TBA): Use target+Z (IC4PZTVL)
+            const repairMStepGrp = repairGrpsList.length === 1 ? firstSourceGrp : targetGrp;
+            const targetRollbackFirstStep = buildName(basePrefix, alphaSeq[0], repairMStepGrp);
 
             const columns = `ROUTE,RIDX,STEP,STEPTIME,TIMESTEP,STEPSTAY,LOWSTEPTIME,LOWTIMESTEP,RTYPE1,RTYPE2,RTYPE3,MSTEP,OSTEP,SECTION,GRP,STEPFLAG,STEPFLAG1,STEPFLAG2,STEPFLAG3,KP1,KP2,KP3,TOKP,CHKKP1,CHKKP2,KPMODE,STEPNM`;
 

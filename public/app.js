@@ -108,6 +108,10 @@ async function generateSQL() {
         return;
     }
 
+    // Get selected mode from radio buttons
+    const modeRadio = document.querySelector('input[name="sqlMode"]:checked');
+    const mode = modeRadio ? modeRadio.value : 'repair';
+
     showLoading(true);
     try {
         const res = await fetch(`${API_BASE}/generate-sql`, {
@@ -116,7 +120,8 @@ async function generateSQL() {
             body: JSON.stringify({
                 filename: currentFile,
                 sheetName: currentSheet,
-                dbType: elements.dbTypeSelect ? elements.dbTypeSelect.value : 'VNKR'
+                dbType: elements.dbTypeSelect ? elements.dbTypeSelect.value : 'VNKR',
+                mode: mode
             })
         });
 
