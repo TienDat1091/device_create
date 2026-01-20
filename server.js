@@ -252,15 +252,35 @@ app.post('/api/generate-sql', (req, res) => {
                 sqlEntryCount++;
                 sqlOutput += `-- No: ${sqlEntryCount}\n`;
 
-                const route = row.ROUTE || '';
+                // Read ALL columns from Excel row
+                const route = (row.ROUTE || '').toString();
                 const step = stepValue.toString().trim();
-                const mstep = row.MSTEP || '0';
-                const ostep = row.OSTEP || '0';
-                const section = (row.SECTION || '').toString().trim();
-                const grp = (row.GRP || '').toString().trim();
-                const rtype2 = (row.RTYPE2 || 'N').toString().trim();
+                const steptime = row.STEPTIME || 0;
+                const timestep = row.TIMESTEP || 0;
+                const stepstay = row.STEPSTAY || 0;
+                const lowsteptime = row.LOWSTEPTIME || 0;
+                const lowtimestep = row.LOWTIMESTEP || 0;
+                const rtype1 = (row.RTYPE1 || '').toString();
+                const rtype2 = (row.RTYPE2 || 'N').toString();
+                const rtype3 = (row.RTYPE3 || '').toString();
+                const mstep = (row.MSTEP || '0').toString();
+                const ostep = (row.OSTEP || '0').toString();
+                const section = (row.SECTION || '').toString();
+                const grp = (row.GRP || '').toString();
+                const stepflag = (row.STEPFLAG || '').toString();
+                const stepflag1 = (row.STEPFLAG1 || '').toString();
+                const stepflag2 = (row.STEPFLAG2 || '').toString();
+                const stepflag3 = (row.STEPFLAG3 || '').toString();
+                const kp1 = (row.KP1 || '').toString();
+                const kp2 = (row.KP2 || '').toString();
+                const kp3 = (row.KP3 || '').toString();
+                const tokp = (row.TOKP || '').toString();
+                const chkkp1 = (row.CHKKP1 || '').toString();
+                const chkkp2 = (row.CHKKP2 || '').toString();
+                const kpmode = (row.KPMODE || '').toString();
+                const stepnm = (row.STEPNM || '').toString();
 
-                sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${ridx}','${step}',0,0,0,0,0,'','${rtype2}','','${mstep}','${ostep}','${section}','${grp}','','','','','','','','','','','','');\n\n`;
+                sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${ridx}','${step}',${steptime},${timestep},${stepstay},${lowsteptime},${lowtimestep},'${rtype1}','${rtype2}','${rtype3}','${mstep}','${ostep}','${section}','${grp}','${stepflag}','${stepflag1}','${stepflag2}','${stepflag3}','${kp1}','${kp2}','${kp3}','${tokp}','${chkkp1}','${chkkp2}','${kpmode}','${stepnm}');\n\n`;
                 useCount++;
             });
 
