@@ -253,7 +253,7 @@ app.post('/api/generate-sql', (req, res) => {
                 return sec ? sec.charAt(0).toUpperCase() : (fallback ? fallback.charAt(0).toUpperCase() : "X");
             };
 
-            const repairGrpsList = row.REPAIR.toString().split(',').map(s => s.trim()).filter(s => s.length > 0);
+            const repairGrpsList = row.REPAIR.toString().split(/[，,;]/).map(s => s.trim()).filter(s => s.length > 0);
             if (repairGrpsList.length === 0) return;
 
             const firstSourceGrp = repairGrpsList[0];
