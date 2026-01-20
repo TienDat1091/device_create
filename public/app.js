@@ -112,6 +112,10 @@ async function generateSQL() {
     const modeRadio = document.querySelector('input[name="sqlMode"]:checked');
     const mode = modeRadio ? modeRadio.value : 'repair';
 
+    // Get prefix replacement value (optional, 4 chars)
+    const prefixInput = document.getElementById('stepPrefixInput');
+    const newPrefix = prefixInput ? prefixInput.value.trim().toUpperCase() : '';
+
     showLoading(true);
     try {
         const res = await fetch(`${API_BASE}/generate-sql`, {
@@ -121,7 +125,8 @@ async function generateSQL() {
                 filename: currentFile,
                 sheetName: currentSheet,
                 dbType: elements.dbTypeSelect ? elements.dbTypeSelect.value : 'VNKR',
-                mode: mode
+                mode: mode,
+                newPrefix: newPrefix
             })
         });
 

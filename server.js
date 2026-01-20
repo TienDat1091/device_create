@@ -225,7 +225,7 @@ loadAuxiliaryData();
 
 app.post('/api/generate-sql', (req, res) => {
     try {
-        const { filename, sheetName, dbType, mode } = req.body;
+        const { filename, sheetName, dbType, mode, newPrefix } = req.body;
         const selectedDB = knowledgeBase[dbType] || knowledgeBase.VNKR;
         const { routeAllData, repairFrequencyMap, grpToSectionMap } = selectedDB;
         const filePath = getFilePath(filename);
@@ -237,6 +237,15 @@ app.post('/api/generate-sql', (req, res) => {
         let sqlEntryCount = 0;
         let useCount = 0;
         let ruleCount = 0;
+
+        // Helper function to replace first 4 chars of a step name
+        const replacePrefix = (stepName, newPrefix) => {
+            if (!newPrefix || newPrefix.length !== 4) return stepName;
+            if (!stepName || stepName.toString().trim() === '0') return stepName;
+            const step = stepName.toString().trim();
+            if (step.length < 4) return step;
+            return newPrefix + step.substring(4);
+        };
 
         // NORMAL MODE: Generate simple INSERT statements for regular stations (RIDX 1-999)
         if (mode === 'normal') {
@@ -254,7 +263,7 @@ app.post('/api/generate-sql', (req, res) => {
 
                 // Read ALL columns from Excel row
                 const route = (row.ROUTE || '').toString();
-                const step = stepValue.toString().trim();
+                const step = replacePrefix(stepValue.toString().trim(), newPrefix);
                 const steptime = row.STEPTIME || 0;
                 const timestep = row.TIMESTEP || 0;
                 const stepstay = row.STEPSTAY || 0;
@@ -263,8 +272,8 @@ app.post('/api/generate-sql', (req, res) => {
                 const rtype1 = (row.RTYPE1 || '').toString();
                 const rtype2 = (row.RTYPE2 || 'N').toString();
                 const rtype3 = (row.RTYPE3 || '').toString();
-                const mstep = (row.MSTEP || '0').toString();
-                const ostep = (row.OSTEP || '0').toString();
+                const mstep = replacePrefix((row.MSTEP || '0').toString(), newPrefix);
+                const ostep = replacePrefix((row.OSTEP || '0').toString(), newPrefix);
                 const section = (row.SECTION || '').toString();
                 const grp = (row.GRP || '').toString();
                 const stepflag = (row.STEPFLAG || '').toString();
@@ -284,7 +293,7 @@ app.post('/api/generate-sql', (req, res) => {
                 useCount++;
             });
 
-            return res.json({ sql: sqlOutput, count: rawData.length, info: `Generated ${useCount} Normal Stations` });
+            return res.json({ sql: sqlOutput, count: rawData.length, info: `Generated ${useCount} Normal Stations${newPrefix ? ` (Prefix: ${newPrefix})` : ''}` });
         }
 
         // REPAIR-ROLLBACK MODE: Existing complex logic
