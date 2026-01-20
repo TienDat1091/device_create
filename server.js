@@ -46,10 +46,15 @@ const getFilePath = (filename) => {
 app.get('/api/files', (req, res) => {
     try {
         if (!fs.existsSync(UPLOADS_DIR)) {
-            return res.json({ files: [] });
+            return res.json([]);
         }
-        const files = fs.readdirSync(UPLOADS_DIR).filter(f => !f.startsWith('.'));
-        res.json({ files });
+        const files = fs.readdirSync(UPLOADS_DIR)
+            .filter(f => !f.startsWith('.'))
+            .map(filename => ({
+                filename: filename,
+                displayName: filename
+            }));
+        res.json(files);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -86,7 +91,7 @@ app.get('/api/sheets', (req, res) => {
         const filePath = getFilePath(filename);
         if (filename && !fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
         const workbook = XLSX.readFile(filePath);
-        res.json({ sheets: workbook.SheetNames });
+        res.json(workbook.SheetNames);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -315,7 +320,8 @@ app.post('/api/generate-sql', (req, res) => {
             }
 
             const originalSection = (row.SECTION || "").toString().trim();
-            const basePrefix = originalStep.length >= 4 ? originalStep.slice(0, 4) : "MHBI";
+            const originalPrefix = originalStep.length >= 4 ? originalStep.slice(0, 4) : "MHBI";
+            const basePrefix = (newPrefix && newPrefix.length === 4) ? newPrefix : originalPrefix;
             const alphaSeq = ['Z', 'Y', 'X', 'V', 'W', 'M', 'N', 'J', 'K', 'L'];
 
             const getPrefix = (grp, fallback) => {
@@ -408,6 +414,109 @@ app.post('/api/generate-sql', (req, res) => {
         res.json({ sql: sqlOutput, count: rawData.length, info: `Generated ${useCount} Auto, ${ruleCount} from Rules.` });
     } catch (error) { res.status(500).json({ error: error.message }); }
 });
+
+app.post('/api/compare-files', (req, res) => {
+    try {
+        const { file1, sheet1, file2, sheet2, keyColumns = ['ROUTE', 'RIDX'] } = req.body;
+
+        const filePath1 = getFilePath(file1);
+        const filePath2 = getFilePath(file2);
+
+        if (!fs.existsSync(filePath1)) return res.status(404).json({ error: 'File 1 not found' });
+        if (!fs.existsSync(filePath2)) return res.status(404).json({ error: 'File 2 not found' });
+
+        const workbook1 = XLSX.readFile(filePath1);
+        const workbook2 = XLSX.readFile(filePath2);
+
+        const data1 = XLSX.utils.sheet_to_json(workbook1.Sheets[sheet1]);
+        const data2 = XLSX.utils.sheet_to_json(workbook2.Sheets[sheet2]);
+
+        // Create maps indexed by key columns
+        const createKey = (row) => keyColumns.map(col => String(row[col] || '')).join('|');
+
+        const map1 = new Map();
+        const map2 = new Map();
+
+        data1.forEach(row => map1.set(createKey(row), row));
+        data2.forEach(row => map2.set(createKey(row), row));
+
+        const differences = [];
+        let matchingRows = 0;
+        let differentRows = 0;
+
+        // Compare rows in file1
+        map1.forEach((row1, key) => {
+            if (!map2.has(key)) {
+                // Row only in file1
+                const keyObj = {};
+                keyColumns.forEach((col, i) => keyObj[col] = key.split('|')[i]);
+                differences.push({
+                    key: keyObj,
+                    status: 'missing',
+                    file1Values: row1,
+                    file2Values: null
+                });
+            } else {
+                // Row exists in both, compare values
+                const row2 = map2.get(key);
+                const allColumns = [...new Set([...Object.keys(row1), ...Object.keys(row2)])];
+                const diffColumns = [];
+
+                allColumns.forEach(col => {
+                    const val1 = String(row1[col] !== undefined ? row1[col] : '');
+                    const val2 = String(row2[col] !== undefined ? row2[col] : '');
+                    if (val1 !== val2) {
+                        diffColumns.push(col);
+                    }
+                });
+
+                if (diffColumns.length > 0) {
+                    const keyObj = {};
+                    keyColumns.forEach((col, i) => keyObj[col] = key.split('|')[i]);
+                    differences.push({
+                        key: keyObj,
+                        status: 'different',
+                        diffColumns,
+                        file1Values: row1,
+                        file2Values: row2
+                    });
+                    differentRows++;
+                } else {
+                    matchingRows++;
+                }
+            }
+        });
+
+        // Find rows only in file2
+        map2.forEach((row2, key) => {
+            if (!map1.has(key)) {
+                const keyObj = {};
+                keyColumns.forEach((col, i) => keyObj[col] = key.split('|')[i]);
+                differences.push({
+                    key: keyObj,
+                    status: 'extra',
+                    file1Values: null,
+                    file2Values: row2
+                });
+            }
+        });
+
+        const summary = {
+            totalRows1: data1.length,
+            totalRows2: data2.length,
+            matchingRows,
+            differentRows,
+            onlyInFile1: Array.from(map1.keys()).filter(k => !map2.has(k)).length,
+            onlyInFile2: Array.from(map2.keys()).filter(k => !map1.has(k)).length
+        };
+
+        res.json({ summary, differences });
+    } catch (error) {
+        console.error('Comparison error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);

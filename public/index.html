@@ -79,6 +79,8 @@
                     <button class="btn ai-toggle-btn" id="aiToggleBtn">✨ AI Assistant</button>
                     <button class="btn btn-primary" id="genSqlBtn"
                         style="background: #8b5cf6; border-color: #7c3aed;">Generate SQL</button>
+                    <button class="btn btn-primary" id="compareBtn"
+                        style="background: #f59e0b; border-color: #d97706;">📊 Compare Files</button>
                     <button class="btn btn-success" id="saveBtn" style="display:none;">Save Change</button>
                     <button class="btn" id="downloadBtn" style="background: #0ea5e9; color: white;">Download
                         File</button>
@@ -112,6 +114,62 @@
                         readonly></textarea>
                     <div style="display: flex; justify-content: flex-end; gap: 10px;">
                         <button id="copySqlBtn" class="btn btn-primary">Copy to Clipboard</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Compare Files Modal -->
+            <div id="compareModal" class="loading-overlay"
+                style="display: none; align-items: flex-start; padding-top: 30px;">
+                <div
+                    style="background: #1e293b; padding: 20px; border-radius: 8px; width: 90%; max-width: 1000px; border: 1px solid #334155; display: flex; flex-direction: column; gap: 15px; max-height: 85vh; overflow-y: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="margin: 0;">📊 Compare Excel Files</h3>
+                        <button id="closeCompareBtn" class="btn" style="padding: 4px 8px;">&times;</button>
+                    </div>
+
+                    <!-- File Selection -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div
+                            style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 6px; border: 1px solid #475569;">
+                            <h4 style="margin: 0 0 10px 0; color: #10b981;">File 1 (Expected)</h4>
+                            <select id="compareFile1" class="btn compare-select"
+                                style="width: 100%; margin-bottom: 10px; background: rgba(0,0,0,0.4); color: #f1f5f9; font-weight: 500;">
+                                <option value="">Select File 1...</option>
+                            </select>
+                            <select id="compareSheet1" class="btn compare-select"
+                                style="width: 100%; background: rgba(0,0,0,0.4); color: #f1f5f9; font-weight: 500;">
+                                <option value="">Select Sheet 1...</option>
+                            </select>
+                        </div>
+                        <div
+                            style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 6px; border: 1px solid #475569;">
+                            <h4 style="margin: 0 0 10px 0; color: #f59e0b;">File 2 (Actual)</h4>
+                            <select id="compareFile2" class="btn compare-select"
+                                style="width: 100%; margin-bottom: 10px; background: rgba(0,0,0,0.4); color: #f1f5f9; font-weight: 500;">
+                                <option value="">Select File 2...</option>
+                            </select>
+                            <select id="compareSheet2" class="btn compare-select"
+                                style="width: 100%; background: rgba(0,0,0,0.4); color: #f1f5f9; font-weight: 500;">
+                                <option value="">Select Sheet 2...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button id="runCompareBtn" class="btn btn-primary"
+                        style="background: #f59e0b; border-color: #d97706;">
+                        Compare Files
+                    </button>
+
+                    <!-- Results Area -->
+                    <div id="compareResults" style="display: none;">
+                        <!-- Summary -->
+                        <div id="compareSummary"
+                            style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+                        </div>
+                        <!-- Details -->
+                        <div id="compareDetails" style="max-height: 400px; overflow-y: auto;">
+                        </div>
                     </div>
                 </div>
             </div>

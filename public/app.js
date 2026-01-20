@@ -28,7 +28,20 @@ const elements = {
     sqlModal: document.getElementById('sqlModal'),
     sqlOutput: document.getElementById('sqlOutput'),
     closeSqlBtn: document.getElementById('closeSqlBtn'),
-    copySqlBtn: document.getElementById('copySqlBtn')
+    copySqlBtn: document.getElementById('copySqlBtn'),
+
+    // Compare Files
+    compareBtn: document.getElementById('compareBtn'),
+    compareModal: document.getElementById('compareModal'),
+    closeCompareBtn: document.getElementById('closeCompareBtn'),
+    compareFile1: document.getElementById('compareFile1'),
+    compareSheet1: document.getElementById('compareSheet1'),
+    compareFile2: document.getElementById('compareFile2'),
+    compareSheet2: document.getElementById('compareSheet2'),
+    runCompareBtn: document.getElementById('runCompareBtn'),
+    compareResults: document.getElementById('compareResults'),
+    compareSummary: document.getElementById('compareSummary'),
+    compareDetails: document.getElementById('compareDetails')
 };
 
 let currentSheet = null;
@@ -90,6 +103,29 @@ function setupEventListeners() {
             document.execCommand('copy');
             alert("Copied to clipboard!");
         });
+    }
+
+    // Compare Files
+    if (elements.compareBtn) {
+        elements.compareBtn.addEventListener('click', openCompareModal);
+    }
+
+    if (elements.closeCompareBtn) {
+        elements.closeCompareBtn.addEventListener('click', () => {
+            elements.compareModal.style.display = 'none';
+        });
+    }
+
+    if (elements.runCompareBtn) {
+        elements.runCompareBtn.addEventListener('click', runComparison);
+    }
+
+    if (elements.compareFile1) {
+        elements.compareFile1.addEventListener('change', (e) => loadSheetsForCompare(e.target.value, 1));
+    }
+
+    if (elements.compareFile2) {
+        elements.compareFile2.addEventListener('change', (e) => loadSheetsForCompare(e.target.value, 2));
     }
 
     // Table Input for Auto-Save
@@ -180,11 +216,11 @@ async function handleFileUpload(e) {
 async function loadFiles() {
     try {
         const res = await fetch(`${API_BASE}/files`);
-        const data = await res.json();
+        const files = await res.json();
         elements.filesList.innerHTML = '';
         renderFileItem("", "Default File");
-        data.files.forEach(filename => {
-            renderFileItem(filename, filename, true);
+        files.forEach(file => {
+            renderFileItem(file.filename, file.displayName, true);
         });
     } catch (err) {
         console.error("Failed to load files", err);
@@ -195,11 +231,11 @@ function renderFileItem(filename, displayName, isDeletable = false) {
     const div = document.createElement('div');
     div.className = `file-item ${currentFile === filename ? 'active' : ''}`;
     div.dataset.filename = filename;
+    div.style.cursor = 'pointer';
 
     const nameSpan = document.createElement('span');
     nameSpan.className = 'file-name';
     nameSpan.textContent = displayName;
-    nameSpan.onclick = () => selectFile(filename);
     div.appendChild(nameSpan);
 
     if (isDeletable) {
@@ -213,6 +249,14 @@ function renderFileItem(filename, displayName, isDeletable = false) {
         };
         div.appendChild(delBtn);
     }
+
+    // Add click handler to entire div
+    div.onclick = (e) => {
+        // Ignore if clicking delete button
+        if (e.target.classList.contains('delete-btn')) return;
+        selectFile(filename);
+    };
+
     elements.filesList.appendChild(div);
 }
 
@@ -255,11 +299,11 @@ async function loadSheets(filename) {
     try {
         const url = `${API_BASE}/sheets?file=${encodeURIComponent(filename)}`;
         const res = await fetch(url);
-        const data = await res.json();
+        const sheets = await res.json();
 
         elements.sheetList.innerHTML = '';
-        if (data.sheets && data.sheets.length > 0) {
-            data.sheets.forEach(sheet => {
+        if (sheets && sheets.length > 0) {
+            sheets.forEach(sheet => {
                 const div = document.createElement('div');
                 div.className = 'sheet-item';
                 div.textContent = sheet;
@@ -523,6 +567,144 @@ function downloadFile() {
 
 function showLoading(show) {
     elements.loadingOverlay.style.display = show ? 'flex' : 'none';
+}
+
+// Compare Files Functions
+async function openCompareModal() {
+    // Populate file dropdowns
+    try {
+        const res = await fetch(`${API_BASE}/files`);
+        const files = await res.json();
+
+        const fileOptions = files.map(f => `<option value="${f.filename}">${f.displayName}</option>`).join('');
+        elements.compareFile1.innerHTML = '<option value="">Select File 1...</option>' + fileOptions;
+        elements.compareFile2.innerHTML = '<option value="">Select File 2...</option>' + fileOptions;
+
+        elements.compareModal.style.display = 'flex';
+        elements.compareResults.style.display = 'none';
+    } catch (err) {
+        alert('Failed to load files: ' + err.message);
+    }
+}
+
+async function loadSheetsForCompare(filename, fileNum) {
+    if (!filename) return;
+
+    try {
+        const res = await fetch(`${API_BASE}/sheets?file=${encodeURIComponent(filename)}`);
+        const sheets = await res.json();
+
+        const sheetOptions = sheets.map(s => `<option value="${s}">${s}</option>`).join('');
+        const selectElement = fileNum === 1 ? elements.compareSheet1 : elements.compareSheet2;
+        selectElement.innerHTML = `<option value="">Select Sheet ${fileNum}...</option>` + sheetOptions;
+    } catch (err) {
+        alert(`Failed to load sheets for File ${fileNum}: ` + err.message);
+    }
+}
+
+async function runComparison() {
+    const file1 = elements.compareFile1.value;
+    const sheet1 = elements.compareSheet1.value;
+    const file2 = elements.compareFile2.value;
+    const sheet2 = elements.compareSheet2.value;
+
+    if (!file1 || !sheet1 || !file2 || !sheet2) {
+        alert('Please select both files and sheets to compare.');
+        return;
+    }
+
+    showLoading(true);
+    try {
+        const res = await fetch(`${API_BASE}/compare-files`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                file1, sheet1, file2, sheet2,
+                keyColumns: ['ROUTE', 'RIDX']
+            })
+        });
+
+        const result = await res.json();
+
+        if (res.ok) {
+            displayComparisonResults(result);
+        } else {
+            alert('Comparison failed: ' + result.error);
+        }
+    } catch (err) {
+        console.error(err);
+        alert('Error during comparison: ' + err.message);
+    } finally {
+        showLoading(false);
+    }
+}
+
+function displayComparisonResults(result) {
+    const { summary, differences } = result;
+
+    // Display summary
+    elements.compareSummary.innerHTML = `
+        <h4 style="margin: 0 0 10px 0;">📊 Comparison Summary</h4>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-size: 0.9rem;">
+            <div style="background: rgba(16, 185, 129, 0.1); padding: 10px; border-radius: 4px; border-left: 3px solid #10b981;">
+                <div style="color: #10b981; font-weight: bold;">${summary.matchingRows}</div>
+                <div style="color: #94a3b8;">Matching Rows</div>
+            </div>
+            <div style="background: rgba(239, 68, 68, 0.1); padding: 10px; border-radius: 4px; border-left: 3px solid #ef4444;">
+                <div style="color: #ef4444; font-weight: bold;">${summary.differentRows}</div>
+                <div style="color: #94a3b8;">Different Rows</div>
+            </div>
+            <div style="background: rgba(245, 158, 11, 0.1); padding: 10px; border-radius: 4px; border-left: 3px solid #f59e0b;">
+                <div style="color: #f59e0b; font-weight: bold;">${summary.onlyInFile1 + summary.onlyInFile2}</div>
+                <div style="color: #94a3b8;">Missing/Extra Rows</div>
+            </div>
+        </div>
+        <div style="margin-top: 10px; font-size: 0.85rem; color: #94a3b8;">
+            Total: ${summary.totalRows1} rows in File 1, ${summary.totalRows2} rows in File 2
+        </div>
+    `;
+
+    // Display differences
+    if (differences.length === 0) {
+        elements.compareDetails.innerHTML = '<div style="text-align: center; padding: 20px; color: #10b981;">✅ Files are identical!</div>';
+    } else {
+        let detailsHTML = '<div style="font-size: 0.85rem;">';
+        differences.forEach(diff => {
+            const statusColor = diff.status === 'different' ? '#ef4444' : '#f59e0b';
+            const statusText = diff.status === 'different' ? 'Different Values' : (diff.status === 'missing' ? 'Only in File 1' : 'Only in File 2');
+
+            detailsHTML += `
+                <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 4px; margin-bottom: 10px; border-left: 3px solid ${statusColor};">
+                    <div style="font-weight: bold; color: ${statusColor}; margin-bottom: 5px;">
+                        ${statusText}: ROUTE=${diff.key.ROUTE}, RIDX=${diff.key.RIDX}
+                    </div>
+            `;
+
+            if (diff.status === 'different' && diff.diffColumns) {
+                detailsHTML += '<div style="margin-top: 8px;">';
+                diff.diffColumns.forEach(col => {
+                    const val1 = diff.file1Values[col] !== undefined ? diff.file1Values[col] : 'N/A';
+                    const val2 = diff.file2Values[col] !== undefined ? diff.file2Values[col] : 'N/A';
+                    detailsHTML += `
+                        <div style="margin-bottom: 5px; padding-left: 10px;">
+                            <span style="color: #94a3b8;">${col}:</span> 
+                            <span style="color: #10b981;">${val1}</span> 
+                            <span style="color: #64748b;">→</span> 
+                            <span style="color: #ef4444;">${val2}</span>
+                        </div>
+                    `;
+                });
+                detailsHTML += '</div>';
+            }
+
+            detailsHTML += '</div>';
+        });
+        detailsHTML += '</div>';
+
+        elements.compareDetails.innerHTML = detailsHTML;
+    }
+
+    elements.compareResults.style.display = 'block';
 }
 
 init();
