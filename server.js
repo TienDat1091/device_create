@@ -327,8 +327,8 @@ app.post('/api/generate-sql', (req, res) => {
 
                 if (i === 0) {
                     currentRidx++;
-                    // Repair Row: GRP is source, MSTEP is target-Z
-                    sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${currentRidx}','${repairStepFinal}',0,0,0,0,0,'','R','','${targetRollbackFirstStep}','0','${targetSecName}','${currentGrp}','','','','','','','','','','','','');\n`;
+                    // Repair Row: GRP is TARGET (where repair happens), MSTEP is target-Z
+                    sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${currentRidx}','${repairStepFinal}',0,0,0,0,0,'','R','','${targetRollbackFirstStep}','0','${targetSecName}','${targetGrp}','','','','','','','','','','','','');\n`;
                     currentRidx++;
                     // Rollback 1: MSTEP is target-Seq, OSTEP is source-full
                     sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${currentRidx}','${basePrefix}BZZZ',0,0,0,0,0,'','B','','${mStepSeq}','${currentSourceStepFull}','BACK','ZZZ','','','','','','','','','','','','');\n`;
