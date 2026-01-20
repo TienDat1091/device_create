@@ -400,6 +400,8 @@ app.post('/api/generate-sql', (req, res) => {
                 return; // Skip auto-gen if rule exists
             }
             const originalSection = (row.SECTION || "").toString().trim();
+            const basePrefix = originalStep.length >= 4 ? originalStep.slice(0, 4) : "MHBI";
+            const alphaSeq = ['Z', 'Y', 'X', 'V', 'W', 'M', 'N', 'J', 'K', 'L'];
 
             // Helper to get prefix from map
             const getPrefix = (grp, fallbackSec) => {
@@ -408,20 +410,19 @@ app.post('/api/generate-sql', (req, res) => {
                 return fallbackSec ? fallbackSec.charAt(0).toUpperCase() : "X";
             };
 
-            // Use REPAIR column as identifying GRP (e.g. TSA)
-            const originalGrpSpec = (row.REPAIR || row.GRP || "").toString().trim();
+            // Split REPAIR into GRPs
+            const repairGrpsList = row.REPAIR.toString().split(',').map(s => s.trim()).filter(s => s.length > 0);
+            if (repairGrpsList.length === 0) return;
 
-            const repairRidxCalc = originalRidx * 10000 + 1;
-            const rollbackRidxCalc = originalRidx * 10000 + 2;
-
-            // 1. Determine Target GRP statistically using originalGrpSpec as key
-            let targetGrp = repairFrequencyMap.get(originalGrpSpec);
+            // 1. Determine Target GRP based on the FIRST GRP in the list
+            const firstSourceGrp = repairGrpsList[0];
+            let targetGrp = repairFrequencyMap.get(firstSourceGrp);
+            let knowledgeFound = true;
             if (!targetGrp) {
-                // Fallback: lookup in ROUTE_ALL using the formed Step name
-                const tempPrefix = getPrefix(originalGrpSpec, originalSection);
-                const searchStepName = `MHBI${tempPrefix}${originalGrpSpec}`;
+                knowledgeFound = false;
+                const tempPrefix = getPrefix(firstSourceGrp, originalSection);
+                const searchStepName = `${basePrefix}${tempPrefix}${firstSourceGrp}`;
 
-                // Closure for findNext - needs current routeAllData
                 const findNextInDB = (s, r) => {
                     if (!routeAllData.length) return null;
                     const idx = routeAllData.findIndex(row => (row.ROUTE === r) && (row.STEP === s || row.STEPNM === s));
@@ -429,30 +430,45 @@ app.post('/api/generate-sql', (req, res) => {
                 };
 
                 const nextRouteRow = findNextInDB(searchStepName, route);
-                targetGrp = nextRouteRow ? nextRouteRow.GRP : (originalGrpSpec + "1");
+                targetGrp = nextRouteRow ? nextRouteRow.GRP : (firstSourceGrp + "1");
             }
 
-            const srcPrefix = getPrefix(originalGrpSpec, originalSection);
-            const targetPrefix = getPrefix(targetGrp, originalSection);
+            const targetSecPrefix = getPrefix(targetGrp, originalSection);
             const targetSection = grpToSectionMap.get(targetGrp) || originalSection;
 
-            const originalStepNameFormed = `MHBI${srcPrefix}${originalGrpSpec}`;
-            const repairStepName = `MHBI${targetPrefix}${targetGrp}`;
-            const rollbackStepName = `MHBIZ${targetGrp}`;
+            // Construct Final Names (If no knowledge, truncate to 4 chars for safety as requested)
+            const getFinalName = (pref, mid, grp) => knowledgeFound ? `${pref}${mid}${grp}` : pref;
 
-            const oStepRollback = originalStepNameFormed;
-            const mStepRollback = repairStepName;
+            const repairStepName = getFinalName(basePrefix, targetSecPrefix, targetGrp);
+            const targetStepForM = getFinalName(basePrefix, alphaSeq[0], targetGrp); // IC4PZTVL
 
-            // SQL Template Construction
             const columns = `ROUTE,RIDX,STEP,STEPTIME,TIMESTEP,STEPSTAY,LOWSTEPTIME,LOWTIMESTEP,RTYPE1,RTYPE2,RTYPE3,MSTEP,OSTEP,SECTION,GRP,STEPFLAG,STEPFLAG1,STEPFLAG2,STEPFLAG3,KP1,KP2,KP3,TOKP,CHKKP1,CHKKP2,KPMODE,STEPNM`;
 
-            // Repair Values
-            // SECTION = targetSection (e.g. TEST for TSB)
-            // RTYPE3 = '', MSTEP = originalStepNameFormed
-            sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${repairRidxCalc}','${repairStepName}',0,0,0,0,0,'','R','','${originalStepNameFormed}','0','${targetSection}','${targetGrp}','','','','','','','','','','','','');\n`;
+            let currentRidx = originalRidx * 10000;
 
-            // Rollback Values
-            sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${rollbackRidxCalc}','${rollbackStepName}',0,0,0,0,0,'','B','','${mStepRollback}','${oStepRollback}','BACK','ZZZ','','','','','','','','','','','','');\n\n`;
+            // Generate rows for each GRP in the list
+            repairGrpsList.forEach((currentGrp, i) => {
+                const currentSecPrefix = getPrefix(currentGrp, originalSection);
+                const oStepName = getFinalName(basePrefix, currentSecPrefix, currentGrp);
+                const mStepSeqName = getFinalName(basePrefix, alphaSeq[i % alphaSeq.length], targetGrp);
+
+                if (i === 0) {
+                    // FIRST GRP: 1 Repair + 1 Rollback
+                    currentRidx += 1;
+                    const mStepRepair = getFinalName(basePrefix, alphaSeq[0], currentGrp); // IC4PZTVK
+                    sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${currentRidx}','${repairStepName}',0,0,0,0,0,'','R','','${mStepRepair}','0','${targetSection}','${targetGrp}','','','','','','','','','','','','');\n`;
+
+                    currentRidx += 1;
+                    const rollbackStepNamePrefixZ = `${basePrefix}BZZZ`;
+                    sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${currentRidx}','${rollbackStepNamePrefixZ}',0,0,0,0,0,'','B','','${mStepSeqName}','${oStepName}','BACK','ZZZ','','','','','','','','','','','','');\n`;
+                } else {
+                    // SUBSEQUENT GRPs: Rollback only
+                    currentRidx += 1;
+                    const rollbackStepNamePrefixZ = `${basePrefix}BZZZ`;
+                    sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${currentRidx}','${rollbackStepNamePrefixZ}',0,0,0,0,0,'','B','','${mStepSeqName}','${oStepName}','BACK','ZZZ','','','','','','','','','','','','');\n`;
+                }
+            });
+            sqlOutput += "\n";
 
             useCount++;
         });
