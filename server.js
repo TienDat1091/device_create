@@ -284,22 +284,32 @@ app.post('/api/generate-sql', (req, res) => {
 
             if (!knowledgeFound) {
                 // FALLBACK SEARCH:
-                // 1. Search in CURRENT SHEET (rawData) first for NEXT station
-                const currentSearchStep = originalStep;
-                const localIdx = rawData.findIndex(r => r.ROUTE === route && (r.STEP === currentSearchStep || r.STEPNM === currentSearchStep));
-                if (localIdx !== -1 && localIdx + 1 < rawData.length && rawData[localIdx + 1].ROUTE === route) {
-                    targetGrp = rawData[localIdx + 1].GRP;
+
+                // CRITICAL FIX: For TEST stations (GRP starts with 'T'), DO NOT use "Next Station" Logic.
+                // Test stations usually self-repair or have explicit rules (like TVI->TVJ).
+                // If we are here, no explicit rule was found (knowledgeFound=false).
+                // So we FORCE Self-Repair for T-stations to avoid jumping to the next test station (e.g. TS0 -> TS5).
+                if (firstSourceGrp.startsWith('T')) {
+                    targetGrp = firstSourceGrp;
                     knowledgeFound = true;
                 } else {
-                    // 2. Search in GLOBAL Knowledge Base
-                    const searchStepName = `${basePrefix}${getPrefix(firstSourceGrp, originalSection)}${firstSourceGrp}`;
-                    const globalIdx = routeAllData.findIndex(r => r.ROUTE === route && (r.STEP === searchStepName || r.STEPNM === searchStepName));
-                    if (globalIdx !== -1 && globalIdx + 1 < routeAllData.length && routeAllData[globalIdx + 1].ROUTE === route) {
-                        targetGrp = routeAllData[globalIdx + 1].GRP;
+                    // 1. Search in CURRENT SHEET (rawData) first for NEXT station
+                    const currentSearchStep = originalStep;
+                    const localIdx = rawData.findIndex(r => r.ROUTE === route && (r.STEP === currentSearchStep || r.STEPNM === currentSearchStep));
+                    if (localIdx !== -1 && localIdx + 1 < rawData.length && rawData[localIdx + 1].ROUTE === route) {
+                        targetGrp = rawData[localIdx + 1].GRP;
                         knowledgeFound = true;
                     } else {
-                        targetGrp = firstSourceGrp + "1"; // Fallback placeholder
-                        knowledgeFound = false;
+                        // 2. Search in GLOBAL Knowledge Base
+                        const searchStepName = `${basePrefix}${getPrefix(firstSourceGrp, originalSection)}${firstSourceGrp}`;
+                        const globalIdx = routeAllData.findIndex(r => r.ROUTE === route && (r.STEP === searchStepName || r.STEPNM === searchStepName));
+                        if (globalIdx !== -1 && globalIdx + 1 < routeAllData.length && routeAllData[globalIdx + 1].ROUTE === route) {
+                            targetGrp = routeAllData[globalIdx + 1].GRP;
+                            knowledgeFound = true;
+                        } else {
+                            targetGrp = firstSourceGrp + "1"; // Fallback placeholder
+                            knowledgeFound = false;
+                        }
                     }
                 }
             }
