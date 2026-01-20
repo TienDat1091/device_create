@@ -177,18 +177,29 @@ const loadKnowledgeFromFile = (filePath, dbKey) => {
                 const grp = r.GRP ? r.GRP.toString().trim() : null;
                 const section = r.SECTION ? r.SECTION.toString().trim() : null;
                 if (grp && section) db.grpToSectionMap.set(grp, section);
-                if (r.RTYPE2 === 'R' && r.MSTEP && r.MSTEP !== '0') {
+
+                // Statistical Learning from Rollback Rows (EXPLICIT SOURCE -> TARGET)
+                if (r.RTYPE2 === 'B' && r.MSTEP && r.OSTEP && r.MSTEP !== '0' && r.OSTEP !== '0') {
                     const mStepStr = r.MSTEP.toString().trim();
-                    const sourceGrp = mStepStr.length > 5 ? mStepStr.slice(5) : mStepStr;
-                    if (grp) {
+                    const oStepStr = r.OSTEP.toString().trim();
+
+                    // In a rollback row:
+                    // OSTEP = The station being rolled back (SOURCE) e.g. UDUPTTVI -> GRP: TVI
+                    // MSTEP = The station it rolls back TO (TARGET) e.g. UDUPTTVJ -> GRP: TVJ
+                    // We extract GRP from the last 3 chars as per the naming pattern seen in debug logs
+                    const sourceGrp = oStepStr.length >= 3 ? oStepStr.slice(-3) : oStepStr;
+                    const targetGrp = mStepStr.length >= 3 ? mStepStr.slice(-3) : mStepStr;
+
+                    if (sourceGrp && targetGrp && sourceGrp !== 'ZZZ' && targetGrp !== 'ZZZ') {
                         if (!pairCounts[sourceGrp]) pairCounts[sourceGrp] = {};
-                        pairCounts[sourceGrp][grp] = (pairCounts[sourceGrp][grp] || 0) + 1;
+                        pairCounts[sourceGrp][targetGrp] = (pairCounts[sourceGrp][targetGrp] || 0) + 1;
                     }
                 }
             });
             for (const src in pairCounts) {
                 const targets = pairCounts[src];
-                db.repairFrequencyMap.set(src, Object.keys(targets).reduce((a, b) => targets[a] > targets[b] ? a : b));
+                const mostFrequent = Object.keys(targets).reduce((a, b) => targets[a] > targets[b] ? a : b);
+                db.repairFrequencyMap.set(src, mostFrequent);
             }
             console.log(`Knowledge Base [${dbKey}] loaded: ${db.routeAllData.length} rows.`);
         } catch (e) { console.error(`Failed to load ${dbKey}`, e); }
