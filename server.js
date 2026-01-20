@@ -227,7 +227,7 @@ app.post('/api/generate-sql', (req, res) => {
         let useCount = 0;
         let ruleCount = 0;
 
-        rawData.forEach(row => {
+        rawData.forEach((row, rowIndex) => {
             const stepValue = row.STEP || row.STEPNM;
             if (!row.RIDX || !stepValue || !row.ROUTE || !row.REPAIR) return;
 
@@ -261,37 +261,55 @@ app.post('/api/generate-sql', (req, res) => {
             let knowledgeFound = !!targetGrp;
 
             if (!knowledgeFound) {
-                const searchStepName = `${basePrefix}${getPrefix(firstSourceGrp, originalSection)}${firstSourceGrp}`;
-                const idx = routeAllData.findIndex(r => r.ROUTE === route && (r.STEP === searchStepName || r.STEPNM === searchStepName));
-                if (idx !== -1 && idx + 1 < routeAllData.length && routeAllData[idx + 1].ROUTE === route) {
-                    targetGrp = routeAllData[idx + 1].GRP;
+                // FALLBACK SEARCH:
+                // 1. Search in CURRENT SHEET (rawData) first
+                const currentSearchStep = originalStep;
+                const localIdx = rawData.findIndex(r => r.ROUTE === route && (r.STEP === currentSearchStep || r.STEPNM === currentSearchStep));
+                if (localIdx !== -1 && localIdx + 1 < rawData.length && rawData[localIdx + 1].ROUTE === route) {
+                    targetGrp = rawData[localIdx + 1].GRP;
                     knowledgeFound = true;
                 } else {
-                    targetGrp = firstSourceGrp + "1";
+                    // 2. Search in GLOBAL Knowledge Base
+                    const searchStepName = `${basePrefix}${getPrefix(firstSourceGrp, originalSection)}${firstSourceGrp}`;
+                    const globalIdx = routeAllData.findIndex(r => r.ROUTE === route && (r.STEP === searchStepName || r.STEPNM === searchStepName));
+                    if (globalIdx !== -1 && globalIdx + 1 < routeAllData.length && routeAllData[globalIdx + 1].ROUTE === route) {
+                        targetGrp = routeAllData[globalIdx + 1].GRP;
+                        knowledgeFound = true;
+                    } else {
+                        targetGrp = firstSourceGrp + "1"; // Fallback placeholder
+                        knowledgeFound = false;
+                    }
                 }
             }
 
             const targetSecPrefix = getPrefix(targetGrp, originalSection);
             const targetSecName = grpToSectionMap.get(targetGrp) || originalSection;
-            const getFinalName = (pref, mid, grp) => knowledgeFound ? `${pref}${mid}${grp}` : pref;
 
-            const repairStepFinal = getFinalName(basePrefix, targetSecPrefix, targetGrp);
-            const targetRollbackFirst = getFinalName(basePrefix, alphaSeq[0], targetGrp);
+            // Generate full name regardless of knowledgeFound flag (flag now only indicates level of confidence)
+            const buildName = (pref, mid, grp) => `${pref}${mid}${grp}`;
+
+            const repairStepFinal = buildName(basePrefix, targetSecPrefix, targetGrp);
+            const targetRollbackFirstStep = buildName(basePrefix, alphaSeq[0], targetGrp);
+
             const columns = `ROUTE,RIDX,STEP,STEPTIME,TIMESTEP,STEPSTAY,LOWSTEPTIME,LOWTIMESTEP,RTYPE1,RTYPE2,RTYPE3,MSTEP,OSTEP,SECTION,GRP,STEPFLAG,STEPFLAG1,STEPFLAG2,STEPFLAG3,KP1,KP2,KP3,TOKP,CHKKP1,CHKKP2,KPMODE,STEPNM`;
 
             let currentRidx = originalRidx * 10000;
             repairGrpsList.forEach((currentGrp, i) => {
-                const currentSourceStep = getFinalName(basePrefix, getPrefix(currentGrp, originalSection), currentGrp);
-                const mStepSeq = getFinalName(basePrefix, alphaSeq[i % alphaSeq.length], targetGrp);
+                const currentSourceSecPrefix = getPrefix(currentGrp, originalSection);
+                const currentSourceStepFull = buildName(basePrefix, currentSourceSecPrefix, currentGrp);
+                const mStepSeq = buildName(basePrefix, alphaSeq[i % alphaSeq.length], targetGrp);
 
                 if (i === 0) {
                     currentRidx++;
-                    sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${currentRidx}','${repairStepFinal}',0,0,0,0,0,'','R','','${targetRollbackFirst}','0','${targetSecName}','${currentGrp}','','','','','','','','','','','','');\n`;
+                    // Repair Row: GRP is source, MSTEP is target-Z
+                    sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${currentRidx}','${repairStepFinal}',0,0,0,0,0,'','R','','${targetRollbackFirstStep}','0','${targetSecName}','${currentGrp}','','','','','','','','','','','','');\n`;
                     currentRidx++;
-                    sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${currentRidx}','${basePrefix}BZZZ',0,0,0,0,0,'','B','','${mStepSeq}','${currentSourceStep}','BACK','ZZZ','','','','','','','','','','','','');\n`;
+                    // Rollback 1: MSTEP is target-Seq, OSTEP is source-full
+                    sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${currentRidx}','${basePrefix}BZZZ',0,0,0,0,0,'','B','','${mStepSeq}','${currentSourceStepFull}','BACK','ZZZ','','','','','','','','','','','','');\n`;
                 } else {
                     currentRidx++;
-                    sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${currentRidx}','${basePrefix}BZZZ',0,0,0,0,0,'','B','','${mStepSeq}','${currentSourceStep}','BACK','ZZZ','','','','','','','','','','','','');\n`;
+                    // Subsequent Rollbacks: MSTEP is target-Seq, OSTEP is source-full
+                    sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${currentRidx}','${basePrefix}BZZZ',0,0,0,0,0,'','B','','${mStepSeq}','${currentSourceStepFull}','BACK','ZZZ','','','','','','','','','','','','');\n`;
                 }
             });
             sqlOutput += "\n";
