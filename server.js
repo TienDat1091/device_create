@@ -89,7 +89,7 @@ app.get('/api/sheets', (req, res) => {
     try {
         const filename = req.query.file;
         const filePath = getFilePath(filename);
-        if (filename && !fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+        if (!fs.existsSync(filePath)) return res.json([]); // Return empty array if file not found (e.g. default file missing)
         const workbook = XLSX.readFile(filePath);
         res.json(workbook.SheetNames);
     } catch (error) {
@@ -103,7 +103,7 @@ app.get('/api/data/:sheetName', (req, res) => {
         const sheetName = req.params.sheetName;
         const filename = req.query.file;
         const filePath = getFilePath(filename);
-        if (filename && !fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
         const workbook = XLSX.readFile(filePath);
         if (!workbook.SheetNames.includes(sheetName)) return res.status(404).json({ error: 'Sheet not found' });
         const sheet = workbook.Sheets[sheetName];

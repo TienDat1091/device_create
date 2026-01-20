@@ -216,14 +216,21 @@ async function handleFileUpload(e) {
 async function loadFiles() {
     try {
         const res = await fetch(`${API_BASE}/files`);
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+        }
         const files = await res.json();
         elements.filesList.innerHTML = '';
         renderFileItem("", "Default File");
-        files.forEach(file => {
-            renderFileItem(file.filename, file.displayName, true);
-        });
+        if (Array.isArray(files)) {
+            files.forEach(file => {
+                renderFileItem(file.filename, file.displayName, true);
+            });
+        }
     } catch (err) {
         console.error("Failed to load files", err);
+        elements.filesList.innerHTML = '';
+        renderFileItem("", "Default File");
     }
 }
 
@@ -299,10 +306,13 @@ async function loadSheets(filename) {
     try {
         const url = `${API_BASE}/sheets?file=${encodeURIComponent(filename)}`;
         const res = await fetch(url);
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+        }
         const sheets = await res.json();
 
         elements.sheetList.innerHTML = '';
-        if (sheets && sheets.length > 0) {
+        if (Array.isArray(sheets) && sheets.length > 0) {
             sheets.forEach(sheet => {
                 const div = document.createElement('div');
                 div.className = 'sheet-item';
@@ -343,7 +353,14 @@ async function loadData(sheetName) {
     try {
         const url = `${API_BASE}/data/${encodeURIComponent(sheetName)}?file=${encodeURIComponent(currentFile)}`;
         const res = await fetch(url);
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+        }
         const result = await res.json();
+
+        if (result.error) {
+            throw new Error(result.error);
+        }
 
         currentData = result.data;
         renderTable(currentData);
