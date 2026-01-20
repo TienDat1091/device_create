@@ -271,9 +271,20 @@ app.post('/api/generate-sql', (req, res) => {
             let targetGrp = repairFrequencyMap.get(firstSourceGrp);
             let knowledgeFound = !!targetGrp;
 
+            // NEW: Local Self-Repair Check
+            // If explicit global knowledge is missing, check if this GRP exists locally in the current route.
+            // If it does, assume it repairs to ITSELF (Self-Repair).
+            if (!knowledgeFound) {
+                const localSelfMatch = rawData.find(r => r.ROUTE === route && r.GRP && r.GRP.toString().trim() === firstSourceGrp);
+                if (localSelfMatch) {
+                    targetGrp = firstSourceGrp; // Self-repair: TBE -> TBE
+                    knowledgeFound = true;
+                }
+            }
+
             if (!knowledgeFound) {
                 // FALLBACK SEARCH:
-                // 1. Search in CURRENT SHEET (rawData) first
+                // 1. Search in CURRENT SHEET (rawData) first for NEXT station
                 const currentSearchStep = originalStep;
                 const localIdx = rawData.findIndex(r => r.ROUTE === route && (r.STEP === currentSearchStep || r.STEPNM === currentSearchStep));
                 if (localIdx !== -1 && localIdx + 1 < rawData.length && rawData[localIdx + 1].ROUTE === route) {
@@ -292,6 +303,9 @@ app.post('/api/generate-sql', (req, res) => {
                     }
                 }
             }
+
+            // Fix: If targetGrp is undefined/null here, fallback to source
+            if (!targetGrp) targetGrp = firstSourceGrp;
 
             const targetSecPrefix = getPrefix(targetGrp, originalSection);
             const targetSecName = grpToSectionMap.get(targetGrp) || originalSection;
