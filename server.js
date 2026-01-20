@@ -381,11 +381,10 @@ app.post('/api/generate-sql', (req, res) => {
 
             const repairStepFinal = buildName(basePrefix, targetSecPrefix, targetGrp);
 
-            // CRITICAL: MSTEP logic depends on number of sources
-            // - Single source (e.g., TBA): Use source+Z (ICP8ZTBA)
-            // - Multiple sources (e.g., TVK,TVI,TBA): Use target+Z (IC4PZTVL)
-            const repairMStepGrp = repairGrpsList.length === 1 ? firstSourceGrp : targetGrp;
-            const targetRollbackFirstStep = buildName(basePrefix, alphaSeq[0], repairMStepGrp);
+            // REPAIR ROW MSTEP: Use Source Step (T + SourceGRP) per user reference data (IC4PTTBA)
+            // Even if multiple sources, we take the first source for the repair row.
+            const repairMStepSourcePrefix = getPrefix(firstSourceGrp, originalSection); // Usually 'T'
+            const repairMStep = buildName(basePrefix, repairMStepSourcePrefix, firstSourceGrp);
 
             const columns = `ROUTE,RIDX,STEP,STEPTIME,TIMESTEP,STEPSTAY,LOWSTEPTIME,LOWTIMESTEP,RTYPE1,RTYPE2,RTYPE3,MSTEP,OSTEP,SECTION,GRP,STEPFLAG,STEPFLAG1,STEPFLAG2,STEPFLAG3,KP1,KP2,KP3,TOKP,CHKKP1,CHKKP2,KPMODE,STEPNM`;
 
@@ -393,21 +392,30 @@ app.post('/api/generate-sql', (req, res) => {
             repairGrpsList.forEach((currentGrp, i) => {
                 const currentSourceSecPrefix = getPrefix(currentGrp, originalSection);
                 const currentSourceStepFull = buildName(basePrefix, currentSourceSecPrefix, currentGrp);
-                const mStepSeq = buildName(basePrefix, alphaSeq[i % alphaSeq.length], targetGrp);
+
+                // Rollback STEP: Seq (Z,Y,X) + TargetGRP (e.g. IC4PZTBB)
+                const rollbackStep = buildName(basePrefix, alphaSeq[i % alphaSeq.length], targetGrp);
+
+                // Rollback MSTEP: Target Step (e.g. IC4PTTBB)
+                const rollbackMStep = repairStepFinal;
+
+                // Rollback OSTEP: Source Step (e.g. IC4PTTBA)
+                const rollbackOStep = currentSourceStepFull;
 
                 if (i === 0) {
                     currentRidx++;
-                    // Repair Row: GRP is TARGET (where repair happens), MSTEP is target-Z
-                    sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${currentRidx}','${repairStepFinal}',0,0,0,0,0,'','R','','${targetRollbackFirstStep}','0','${targetSecName}','${targetGrp}','','','','','','','','','','','','');\n`;
+                    // Repair Row: STEP=Target, MSTEP=Source, OSTEP=0
+                    sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${currentRidx}','${repairStepFinal}',0,0,0,0,0,'','R','','${repairMStep}','0','${targetSecName}','${targetGrp}','','','','','','','','','','','','');\n`;
                     currentRidx++;
-                    // Rollback 1: MSTEP is target-Seq, OSTEP is source-full
-                    sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${currentRidx}','${basePrefix}BZZZ',0,0,0,0,0,'','B','','${mStepSeq}','${currentSourceStepFull}','BACK','ZZZ','','','','','','','','','','','','');\n`;
+                    // Rollback 1: STEP=Seq+Target, MSTEP=Target, OSTEP=Source
+                    sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${currentRidx}','${rollbackStep}',0,0,0,0,0,'','B','','${rollbackMStep}','${rollbackOStep}','BACK','ZZZ','','','','','','','','','','','','');\n`;
                 } else {
                     currentRidx++;
-                    // Subsequent Rollbacks: MSTEP is target-Seq, OSTEP is source-full
-                    sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${currentRidx}','${basePrefix}BZZZ',0,0,0,0,0,'','B','','${mStepSeq}','${currentSourceStepFull}','BACK','ZZZ','','','','','','','','','','','','');\n`;
+                    // Subsequent Rollbacks: Same logic
+                    sqlOutput += `INSERT INTO route_step (${columns}) values('${route}','${currentRidx}','${rollbackStep}',0,0,0,0,0,'','B','','${rollbackMStep}','${rollbackOStep}','BACK','ZZZ','','','','','','','','','','','','');\n`;
                 }
             });
+
             sqlOutput += "\n";
             useCount++;
         });
