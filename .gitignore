@@ -8,6 +8,7 @@ excel_viewer/
 .agent/
 brain/
 
-# Keep the knowledge base
+# Keep the knowledge bases
 !ROUTE_ALL.xls
+!VNFB.xls
 !Ho tro tao all - Copy - Copy.xlsx

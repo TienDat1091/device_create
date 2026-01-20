@@ -250,38 +250,50 @@ app.get('/api/download', (req, res) => {
 });
 
 const ROUTE_ALL_PATH = path.join(__dirname, 'ROUTE_ALL.xls');
+const VNFB_PATH = path.join(__dirname, 'VNFB.xls');
 const FILE_NAME_TAOREPAIR = 'Ho tro tao all - Copy - Copy.xlsx';
 const TAOREPAIR_PATH = path.join(__dirname, FILE_NAME_TAOREPAIR);
 
-let routeAllData = [];
-let taoRepairMap = new Map(); // Key: ROUTE_RIDX, Value: SQL
-let repairFrequencyMap = new Map(); // Key: sourceGRP, Value: targetGRP (most frequent)
-let grpToSectionMap = new Map(); // Key: GRP, Value: SECTION
+// Multi-DB Knowledge Base
+const knowledgeBase = {
+    VNKR: {
+        routeAllData: [],
+        repairFrequencyMap: new Map(),
+        grpToSectionMap: new Map()
+    },
+    VNFB: {
+        routeAllData: [],
+        repairFrequencyMap: new Map(),
+        grpToSectionMap: new Map()
+    }
+};
 
-// Load Auxiliary Data (ROUTE_ALL & TaoRepair)
-const loadAuxiliaryData = () => {
-    // 1. ROUTE_ALL & Frequency Analysis
-    if (fs.existsSync(ROUTE_ALL_PATH)) {
+let taoRepairMap = new Map(); // Key: ROUTE_RIDX, Value: SQL
+
+// Load a specific Knowledge Base file
+const loadKnowledgeFromFile = (filePath, dbKey) => {
+    if (fs.existsSync(filePath)) {
         try {
-            const wb = XLSX.readFile(ROUTE_ALL_PATH);
+            const db = knowledgeBase[dbKey];
+            const wb = XLSX.readFile(filePath);
             const sheet = wb.Sheets[wb.SheetNames[0]];
-            routeAllData = XLSX.utils.sheet_to_json(sheet);
-            console.log(`Loaded ${routeAllData.length} rows from ROUTE_ALL.xls`);
+            db.routeAllData = XLSX.utils.sheet_to_json(sheet);
+            console.log(`Loaded ${db.routeAllData.length} rows for ${dbKey} from ${path.basename(filePath)}`);
 
             // Frequency Analysis for Repair Pairs
             const pairCounts = {}; // Key: SourceGRP, Value: { [targetGRP]: count }
-            routeAllData.forEach(r => {
-                if (r.GRP && r.SECTION) {
-                    grpToSectionMap.set(r.GRP.toString().trim(), r.SECTION.toString().trim());
+            db.routeAllData.forEach(r => {
+                const grp = r.GRP ? r.GRP.toString().trim() : null;
+                const section = r.SECTION ? r.SECTION.toString().trim() : null;
+
+                if (grp && section) {
+                    db.grpToSectionMap.set(grp, section);
                 }
 
                 if (r.RTYPE2 === 'R' && r.MSTEP && r.MSTEP !== '0') {
                     const mStepStr = r.MSTEP.toString().trim();
-                    // Extract GRP from MSTEP (Usually MHBI-Prefix-GRP)
-                    // MHBITTSA -> slice(5) -> TSA
-                    // MHBIWWINH -> slice(5) -> WINH
                     const sourceGrp = mStepStr.length > 5 ? mStepStr.slice(5) : mStepStr;
-                    const targetGrp = r.GRP ? r.GRP.toString().trim() : null;
+                    const targetGrp = grp;
 
                     if (targetGrp) {
                         if (!pairCounts[sourceGrp]) pairCounts[sourceGrp] = {};
@@ -294,18 +306,27 @@ const loadAuxiliaryData = () => {
             for (const src in pairCounts) {
                 const targets = pairCounts[src];
                 const mostFrequent = Object.keys(targets).reduce((a, b) => targets[a] > targets[b] ? a : b);
-                repairFrequencyMap.set(src, mostFrequent);
+                db.repairFrequencyMap.set(src, mostFrequent);
             }
-            console.log(`Knowledge Base: ${repairFrequencyMap.size} GRP pairings learned.`);
+            console.log(`Knowledge Base [${dbKey}]: ${db.repairFrequencyMap.size} GRP pairings learned.`);
 
         } catch (e) {
-            console.error("Failed to load ROUTE_ALL.xls", e);
+            console.error(`Failed to load ${dbKey} database from ${filePath}`, e);
         }
     } else {
-        console.warn("ROUTE_ALL.xls not found at", ROUTE_ALL_PATH);
+        console.warn(`${dbKey} database file not found at`, filePath);
     }
+};
 
-    // 2. TaoRepair Rules
+// Load All Auxiliary Data
+const loadAuxiliaryData = () => {
+    // 1. Load VNKR (ROUTE_ALL.xls)
+    loadKnowledgeFromFile(ROUTE_ALL_PATH, 'VNKR');
+
+    // 2. Load VNFB (VNFB.xls)
+    loadKnowledgeFromFile(VNFB_PATH, 'VNFB');
+
+    // 3. TaoRepair Rules
     if (fs.existsSync(TAOREPAIR_PATH)) {
         try {
             const wb = XLSX.readFile(TAOREPAIR_PATH);
@@ -333,7 +354,9 @@ loadAuxiliaryData();
 // API: Generate SQL
 app.post('/api/generate-sql', (req, res) => {
     try {
-        const { filename, sheetName } = req.body;
+        const { filename, sheetName, dbType } = req.body;
+        const selectedDB = knowledgeBase[dbType] || knowledgeBase.VNKR; // Fallback to VNKR
+        const { routeAllData, repairFrequencyMap, grpToSectionMap } = selectedDB;
         const filePath = getFilePath(filename);
 
         if (!fs.existsSync(filePath)) {
@@ -347,27 +370,6 @@ app.post('/api/generate-sql', (req, res) => {
 
         const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
         let sqlOutput = "";
-
-        // Helper: Find Next Row in ROUTE_ALL
-        const findNextRouteAllVlaues = (currentStep, currentRoute) => {
-            if (!routeAllData.length) return null;
-
-            // Assume ROUTE_ALL is sorted. Find index of current step.
-            // Matching logic: Must match ROUTE and STEP/STEPNM
-            const idx = routeAllData.findIndex(r =>
-                (r.ROUTE === currentRoute) &&
-                ((r.STEP === currentStep) || (r.STEPNM === currentStep))
-            );
-
-            if (idx !== -1 && idx + 1 < routeAllData.length) {
-                const nextRow = routeAllData[idx + 1];
-                // Verify next row is still same route (optional but good safety)
-                if (nextRow.ROUTE === currentRoute) {
-                    return nextRow;
-                }
-            }
-            return null;
-        };
 
         let useCount = 0;
         let ruleCount = 0;
@@ -418,7 +420,15 @@ app.post('/api/generate-sql', (req, res) => {
                 // Fallback: lookup in ROUTE_ALL using the formed Step name
                 const tempPrefix = getPrefix(originalGrpSpec, originalSection);
                 const searchStepName = `MHBI${tempPrefix}${originalGrpSpec}`;
-                const nextRouteRow = findNextRouteAllVlaues(searchStepName, route);
+
+                // Closure for findNext - needs current routeAllData
+                const findNextInDB = (s, r) => {
+                    if (!routeAllData.length) return null;
+                    const idx = routeAllData.findIndex(row => (row.ROUTE === r) && (row.STEP === s || row.STEPNM === s));
+                    return (idx !== -1 && idx + 1 < routeAllData.length && routeAllData[idx + 1].ROUTE === r) ? routeAllData[idx + 1] : null;
+                };
+
+                const nextRouteRow = findNextInDB(searchStepName, route);
                 targetGrp = nextRouteRow ? nextRouteRow.GRP : (originalGrpSpec + "1");
             }
 

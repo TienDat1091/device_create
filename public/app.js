@@ -21,6 +21,7 @@ const elements = {
     saveBtn: document.getElementById('saveBtn'),
     downloadBtn: document.getElementById('downloadBtn'),
     saveStatus: document.getElementById('saveStatus'),
+    dbTypeSelect: document.getElementById('dbTypeSelect'),
 
     // SQL Gen
     genSqlBtn: document.getElementById('genSqlBtn'),
@@ -114,7 +115,8 @@ async function generateSQL() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 filename: currentFile,
-                sheetName: currentSheet
+                sheetName: currentSheet,
+                dbType: elements.dbTypeSelect ? elements.dbTypeSelect.value : 'VNKR'
             })
         });
 

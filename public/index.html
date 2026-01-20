@@ -47,6 +47,13 @@
             <header>
                 <h1 id="currentSheetName">Select a Sheet</h1>
                 <div class="actions">
+                    <div style="display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.2); padding: 4px 10px; border-radius: 6px; border: 1px solid #334155;">
+                        <span style="font-size: 0.8rem; color: #94a3b8;">DB:</span>
+                        <select id="dbTypeSelect" style="background: transparent; color: white; border: none; font-size: 0.8rem; outline: none; cursor: pointer;">
+                            <option value="VNKR" style="background: #1e293b;">VNKRDB0</option>
+                            <option value="VNFB" style="background: #1e293b;">VNFBDB0</option>
+                        </select>
+                    </div>
                     <button class="btn ai-toggle-btn" id="aiToggleBtn">✨ AI Assistant</button>
                     <button class="btn btn-primary" id="genSqlBtn"
                         style="background: #8b5cf6; border-color: #7c3aed;">Generate SQL</button>
